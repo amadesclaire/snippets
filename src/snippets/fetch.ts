@@ -1,36 +1,35 @@
 class HttpError extends Error {
   constructor(public response: Response) {
-    super(`HTTP error ${response.status}`);
+    super(
+      `HTTP error ${response.status}: ${response.statusText} @ ${response.url}`
+    );
   }
 }
 
-const testData = "//dummyjson.com/test";
+type Result<T> = Promise<[T | null, Error | HttpError | null]>;
 
-function handleHttpError(status: number) {
-  switch (status) {
-    case 500: {
-      console.log("Internal server error");
-      break;
-    }
-    case 404: {
-      console.log("Resource not found");
-      break;
-    }
-  }
-}
-
-export async function safeFetch(url: string, options: RequestInit = {}) {
+export async function fetchResult<T>(
+  url: URL,
+  options: RequestInit = {}
+): Result<T> {
   try {
-    const response = await fetch(url, options);
+    const response = (await fetch(url, options)) as Response;
     if (!response.ok) throw new HttpError(response);
-    const data = (await response.json()) as ResponseType;
+    const data = (await response.json()) as T;
     return [data, null];
   } catch (error) {
     if (error instanceof HttpError) {
-      handleHttpError(error.response.status);
+      return [null, error];
     }
-    return [null, error];
+    if (error instanceof Error) {
+      return [null, new Error(`Network error: ${error.message}`)];
+    }
+    return [null, new Error("Unknown error occurred")];
   }
 }
 
-safeFetch(testData);
+type Test = { test: string };
+
+const url = new URL("https://dummyjson.com/test");
+
+const [data, err] = await fetchResult<Test>(url);
